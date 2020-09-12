@@ -22,6 +22,16 @@ interface Availability {
   friday: boolean;
 }
 
+function unavailable(availability: Availability) {
+  var unavails: Record<string, boolean> = {}
+  if (!availability.monday) {unavails['Monday'] = true}
+  if (!availability.tuesday) {unavails['Tuesday'] = true}
+  if (!availability.wednesday) {unavails['Wednesday'] = true}
+  if (!availability.thursday) {unavails['Thursday'] = true}
+  if (!availability.friday) {unavails['Friday'] = true}
+  return unavails
+}
+
 interface JobsScreenState {
   title: string;
   jobs: JobRecord[];
@@ -82,7 +92,7 @@ export class JobsScreen extends React.Component<JobsScreenProps, JobsScreenState
           updateJob(record.rid, this.context.user);
         }}
       />
-    );
+    );    
   };
 
   fetchRecords = async (): Promise<void> => {
@@ -103,10 +113,26 @@ export class JobsScreen extends React.Component<JobsScreenProps, JobsScreenState
   filterJobs = (jobs: JobRecord[], availability: Availability): void => {
     // Step 0: Clone the jobs input
     const newJobs: JobRecord[] = cloneDeep(jobs);
-    console.log(newJobs, availability);
+    // console.log(newJobs, availability);
 
     // Step 1: Remove jobs where the schedule doesn't align with the users' availability.
+    const unavails = unavailable(availability)
 
+    for (let i = newJobs.length - 1; i >= 0; i--) {
+      if (Object.keys(unavails).length === 5) break
+      
+      let sched = newJobs[i]['schedule']
+      let status = true
+      for (let day of sched) {
+        if (unavails[day]) {
+          status = false
+          break
+        }
+      }
+      if (!status) {
+        newJobs.splice(i, 1)
+      }
+    }
     // Step 2: Save into state
     this.setState({ jobs: newJobs });
   };
