@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState} from 'react';
 import { View } from 'react-native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { GlobalContext } from '@components/ContextProvider';
@@ -9,10 +9,11 @@ import { getJobs, updateJob } from '@utils/airtable/requests';
 import { Status } from '../StatusScreen/StatusScreen';
 import ContactsModal from '@components/ContactsModal/ContactsModal';
 import { StatusController } from '@screens/StatusScreen/StatusController';
-
 // BWBP
-import { Overlay, CheckBox, Button } from 'react-native-elements';
+import { Overlay, CheckBox, Button, Text, Header } from 'react-native-elements';
 import { cloneDeep } from 'lodash';
+
+import { OverlayHeader } from './styles';
 
 interface Availability {
   monday: boolean;
@@ -22,12 +23,23 @@ interface Availability {
   friday: boolean;
 }
 
+function unavailable(availability: Availability) {
+  var unavails: Record<string, boolean> = {}
+  if (!availability.monday) {unavails['Monday'] = true}
+  if (!availability.tuesday) {unavails['Tuesday'] = true}
+  if (!availability.wednesday) {unavails['Wednesday'] = true}
+  if (!availability.thursday) {unavails['Thursday'] = true}
+  if (!availability.friday) {unavails['Friday'] = true}
+  return unavails
+}
+
 interface JobsScreenState {
   title: string;
   jobs: JobRecord[];
   refreshing: boolean;
   staticHeader: boolean;
   status: Status;
+  visible: boolean;
   availability: Availability;
 }
 
@@ -57,11 +69,12 @@ export class JobsScreen extends React.Component<JobsScreenProps, JobsScreenState
       refreshing: true,
       staticHeader: false,
       status: Status.none,
+      visible: false,
       availability: {
         monday: false,
         tuesday: false,
-        wednesday: true,
-        thursday: true,
+        wednesday: false,
+        thursday: false,
         friday: false,
       },
     };
@@ -82,7 +95,7 @@ export class JobsScreen extends React.Component<JobsScreenProps, JobsScreenState
           updateJob(record.rid, this.context.user);
         }}
       />
-    );
+    );    
   };
 
   fetchRecords = async (): Promise<void> => {
@@ -103,10 +116,26 @@ export class JobsScreen extends React.Component<JobsScreenProps, JobsScreenState
   filterJobs = (jobs: JobRecord[], availability: Availability): void => {
     // Step 0: Clone the jobs input
     const newJobs: JobRecord[] = cloneDeep(jobs);
-    console.log(newJobs, availability);
+    // console.log(newJobs, availability);
 
     // Step 1: Remove jobs where the schedule doesn't align with the users' availability.
+    const unavails = unavailable(availability)
 
+    for (let i = newJobs.length - 1; i >= 0; i--) {
+      if (Object.keys(unavails).length === 5) break
+      
+      let sched = newJobs[i]['schedule']
+      let status = true
+      for (let day of sched) {
+        if (unavails[day]) {
+          status = false
+          break
+        }
+      }
+      if (!status) {
+        newJobs.splice(i, 1)
+      }
+    }
     // Step 2: Save into state
     this.setState({ jobs: newJobs });
   };
@@ -131,6 +160,9 @@ export class JobsScreen extends React.Component<JobsScreenProps, JobsScreenState
 
   render() {
     const { monday, tuesday, wednesday, thursday, friday } = this.state.availability;
+    var visible = this.state.visible
+
+  
     return (
       <BaseScreen
         title={this.state.title}
@@ -145,62 +177,83 @@ export class JobsScreen extends React.Component<JobsScreenProps, JobsScreenState
           />
         }
       >
-        <View>
-          <CheckBox
-            title="Monday"
-            checked={monday}
-            onPress={() =>
-              this.setState(prev => {
-                return { ...prev, availability: { ...prev.availability, monday: !monday } };
-              })
-            }
-          />
-          <CheckBox
-            title="Tuesday"
-            checked={tuesday}
-            onPress={() =>
-              this.setState(prev => {
-                return { ...prev, availability: { ...prev.availability, tuesday: !tuesday } };
-              })
-            }
-          />
-          <CheckBox
-            title="Wednesday"
-            checked={wednesday}
-            onPress={(): void =>
-              this.setState(prev => {
-                return { ...prev, availability: { ...prev.availability, wednesday: !wednesday } };
-              })
-            }
-          />
-          <CheckBox
-            title="Thursday"
-            checked={thursday}
-            onPress={(): void =>
-              this.setState(prev => {
-                return { ...prev, availability: { ...prev.availability, thursday: !thursday } };
-              })
-            }
-          />
-          <CheckBox
-            title="Friday"
-            checked={friday}
-            onPress={(): void =>
-              this.setState(prev => {
-                return { ...prev, availability: { ...prev.availability, friday: !friday } };
-              })
-            }
-          />
-        </View>
-        <View style={{ alignItems: 'center', marginVertical: 20 }}>
-          <Button
+          <Button 
             title="Filter Search"
-            containerStyle={{ width: '50%' }}
-            onPress={(): void => {
-              this.filterJobs(getJobs(), this.state.availability);
-            }}
-          />
-        </View>
+            onPress={() =>
+              this.setState(prev => {
+                return { ...prev, visible: !visible}
+              })} />
+          <Overlay
+            isVisible={visible}
+            onBackdropPress={() =>
+              this.setState(prev => {
+                return { ...prev, visible: !visible}
+              })
+            }
+            >
+            <View>
+              <OverlayHeader>Filter by day</OverlayHeader>
+              
+              <CheckBox
+                title="Monday"
+                checked={monday}
+                onPress={() =>
+                  this.setState(prev => {
+                    return { ...prev, availability: { ...prev.availability, monday: !monday } };
+                  })
+                }
+              />
+              <CheckBox
+                title="Tuesday"
+                checked={tuesday}
+                onPress={() =>
+                  this.setState(prev => {
+                    return { ...prev, availability: { ...prev.availability, tuesday: !tuesday } };
+                  })
+                }
+              />
+              <CheckBox
+                title="Wednesday"
+                checked={wednesday}
+                onPress={(): void =>
+                  this.setState(prev => {
+                    return { ...prev, availability: { ...prev.availability, wednesday: !wednesday } };
+                  })
+                }
+              />
+              <CheckBox
+                title="Thursday"
+                checked={thursday}
+                onPress={(): void =>
+                  this.setState(prev => {
+                    return { ...prev, availability: { ...prev.availability, thursday: !thursday } };
+                  })
+                }
+              />
+              <CheckBox
+                title="Friday"
+                checked={friday}
+                onPress={(): void =>
+                  this.setState(prev => {
+                    return { ...prev, availability: { ...prev.availability, friday: !friday } };
+                  })
+                }
+              />
+              <View style={{ alignItems: 'center', marginVertical: 20 }}>
+                <Button
+                  title="Filter Search"
+                  containerStyle={{ width: '50%' }}
+                  onPress={(): void => {
+                    this.filterJobs(getJobs(), this.state.availability);
+                    this.setState(prev => {
+                      return { ...prev, visible: !visible}
+                    })
+                  }}
+                />
+              </View>
+            </View>
+          </Overlay>
+          
         <StatusController defaultChild={this.renderCards()} status={this.state.status} />
       </BaseScreen>
     );
